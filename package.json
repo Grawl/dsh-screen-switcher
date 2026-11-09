@@ -1,0 +1,62 @@
+{
+  "name": "dsh-screen-switcher",
+  "version": "0.1.1",
+  "description": "Ctrl+Tab switcher for DeepSeek Harness: an Alt-Tab-style list of every place you visited — sessions, Settings sections and plugin pages — most recently visited first. Hold Ctrl to see it, release to switch.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "scripts": {
+    "verify": "node scripts/verify.mjs"
+  },
+  "license": "MIT",
+  "author": "Daniil Pronin",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "ctrl-tab",
+    "alt-tab",
+    "switcher",
+    "screen-switcher",
+    "session-switcher",
+    "recent-sessions",
+    "mru",
+    "recently-visited",
+    "keyboard-navigation",
+    "web-ui",
+    "settings"
+  ],
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Grawl/dsh-screen-switcher.git"
+  },
+  "homepage": "https://github.com/Grawl/dsh-screen-switcher#readme",
+  "bugs": {
+    "url": "https://github.com/Grawl/dsh-screen-switcher/issues"
+  }
+}

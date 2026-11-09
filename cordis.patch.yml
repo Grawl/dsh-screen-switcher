@@ -1,0 +1,8 @@
+# dsh-screen-switcher bundle patch.
+#
+# The Client half registers one shell overlay and listens for Ctrl+Tab itself;
+# the Host half is an empty apply, so this row only makes the browser module
+# part of the composition.
+- insert:
+    - id: screen-switcher
+      name: 'dsh-screen-switcher'
