@@ -835,6 +835,62 @@ window.__ModuleLoader__.load({
         }
       }
 
+      /**
+       * A plugin card survives client-side checks even after its package is uninstalled.
+       * When the switcher opens such a place, ask the plugin manager once; if the
+       * package is gone, forget the place and leave the Plugins list on screen.
+       */
+      function verifyPluginPlace(screen) {
+        if (screen.kind !== 'panel' || screen.panelId !== PLUGINS_PANEL) return
+        const view = screen.state?.view
+        if (view?.kind !== 'package' || typeof view.name !== 'string') return
+        let manager = null
+        try {
+          manager = ctx.get?.('remote')?.pluginManager ?? null
+        } catch (_error) {
+          manager = null
+        }
+        if (manager === null || typeof manager.listBundles !== 'function') return
+        const forget = () => {
+          const next = history.filter((item) => keyOf(item) !== keyOf(screen))
+          if (next.length !== history.length) {
+            history = next
+            persist()
+            if (overlay.getSnapshot().open) refreshOpenList()
+          }
+          try {
+            const instance = panelBinding?.instance
+            if (instance?.actions?.setView !== undefined && instance.getSnapshot()?.view?.kind === 'package') {
+              instance.actions.setView({ kind: 'list' })
+            }
+          } catch (_error) {
+            /* the page owns its own recovery */
+          }
+        }
+        let pending
+        try {
+          pending = manager.listBundles()
+        } catch (_error) {
+          return
+        }
+        Promise.resolve(pending).then(
+          (answer) => {
+            if (answer?.ok !== true || !Array.isArray(answer.value)) return
+            const names = new Set(
+              answer.value
+                .map((bundle) => bundle?.name)
+                .filter((name) => typeof name === 'string' && name !== '')
+            )
+            if (names.size === 0) return
+            if (names.has(view.name)) return
+            forget()
+          },
+          () => {
+            /* an unavailable manager keeps the place: no proof it is gone */
+          }
+        )
+      }
+
       function navigateTo(screen) {
         suppressUntil = Date.now() + 1500
         history = mergeScreen(history, screen)
@@ -846,7 +902,10 @@ window.__ModuleLoader__.load({
             closeSettings()
             if (screen.kind === 'panel') {
               ctx.layout.selectPanel(screen.panelId)
-              if (screen.panelId === PLUGINS_PANEL && screen.state !== undefined) restorePanelState(screen.state)
+              if (screen.panelId === PLUGINS_PANEL && screen.state !== undefined) {
+                restorePanelState(screen.state)
+                verifyPluginPlace(screen)
+              }
             } else if (screen.kind === 'session') {
               ctx.layout.selectPanel(null)
               const workspace = ctx.uiWorkspace

@@ -307,6 +307,12 @@ const localeValues = new Map([
   ['status.idle', 'Idle']
 ])
 
+const remote = {
+  pluginManager: {
+    listBundles: async () => ({ ok: true, value: [{ name: 'dsh-select-quote' }] })
+  }
+}
+
 const locale = {
   register() {},
   bind: () => (key) => localeValues.get(key) ?? key,
@@ -316,7 +322,7 @@ const locale = {
 }
 
 const sessionsService = { list: sessions }
-const services = { slots, locale, sessions: sessionsService, layout, uiWorkspace, uiSession, workspaces }
+const services = { slots, locale, sessions: sessionsService, layout, uiWorkspace, uiSession, workspaces, remote }
 const ctx = {
   slots,
   locale,
@@ -625,6 +631,23 @@ assert.ok(stored.screens.some((screen) => keyOfScreen(screen) === 'settings:plug
 assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'session:s2'))
 assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'session:s3'))
 assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'settings:temp'))
+
+// Visiting a plugin card whose package is gone forgets that place.
+layout.selectPanel('plugins')
+pluginInstance.actions.setView({ kind: 'package', name: 'gone-pkg' })
+layout.selectPanel(null)
+uiWorkspace.openSession('s1')
+advance(50)
+ctrlTab()
+const staleRow = rows().find((row) => textOf(row.children[1].children[0]) === 'gone-pkg')
+assert.ok(staleRow, 'the stale plugin card is listed before the visit')
+staleRow.props.onClick()
+await new Promise((resolve) => setImmediate(resolve))
+assert.equal(pluginState.view.kind, 'list', 'the page falls back to the plugin list')
+ctrlTab()
+assert.ok(!rowNames().includes('gone-pkg'), 'the visited stale place is forgotten')
+fireKey('keydown', { key: 'Escape' })
+advance(1500)
 
 // No cap: every visited place stays until it stops existing.
 const zetaIds = Array.from({ length: 30 }, (_, index) => 'z' + String(index))

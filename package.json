@@ -1,6 +1,6 @@
 {
   "name": "dsh-screen-switcher",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Ctrl+Tab switcher for DeepSeek Harness: an Alt-Tab-style list of every place you visited — sessions, Settings sections and plugin pages — most recently visited first. Hold Ctrl to see it, release to switch.",
   "type": "module",
   "exports": {

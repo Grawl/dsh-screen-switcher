@@ -67,9 +67,6 @@ to an already installed copy hot-reload.
   page.
 - Screen history stops at the global page level; the right sidebar (files,
   terminal, browser) is not part of the list.
-- A plugin page for a package that was uninstalled stays in the list: the
-  Client cannot check the installed set synchronously, and the page falls back
-  to the Plugins list when the package is gone.
 - Settings sub-tabs whose state lives inside a section component (for example
   the read-only inventory tabs under Built-in plugins) are restored to the
   section, not to the exact tab.
