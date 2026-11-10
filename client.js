@@ -59,7 +59,13 @@ window.__ModuleLoader__.load({
       'kind.settings': '设置',
       'settings.all': '设置',
       'session.untitled': '新会话',
-      'session.noWorkspace': '无工作目录'
+      'session.noWorkspace': '无工作目录',
+      'status.running': '运行中',
+      'status.completed': '有新结果未读',
+      'status.approval': '等待批准',
+      'status.planReview': '计划待审阅',
+      'status.answer': '等待回答',
+      'status.idle': '空闲'
     }
 
     const en = {
@@ -75,7 +81,13 @@ window.__ModuleLoader__.load({
       'kind.settings': 'Settings',
       'settings.all': 'Settings',
       'session.untitled': 'New session',
-      'session.noWorkspace': 'No workspace'
+      'session.noWorkspace': 'No workspace',
+      'status.running': 'Running',
+      'status.completed': 'New completion, unread',
+      'status.approval': 'Waiting for approval',
+      'status.planReview': 'Plan awaiting review',
+      'status.answer': 'Waiting for answer',
+      'status.idle': 'Idle'
     }
 
     const ru = {
@@ -91,7 +103,13 @@ window.__ModuleLoader__.load({
       'kind.settings': 'Настройки',
       'settings.all': 'Настройки',
       'session.untitled': 'Новая сессия',
-      'session.noWorkspace': 'Без рабочей папки'
+      'session.noWorkspace': 'Без рабочей папки',
+      'status.running': 'Выполняется',
+      'status.completed': 'Новый результат, не прочитан',
+      'status.approval': 'Ждёт подтверждения',
+      'status.planReview': 'План ждёт проверки',
+      'status.answer': 'Ждёт ответа',
+      'status.idle': 'Без активности'
     }
 
     /** Dictionaries beyond the zh/en baseline; registered only when the Host ships that language. */
@@ -127,6 +145,21 @@ window.__ModuleLoader__.load({
       '.dss_name,.dss_meta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.dss_name{font-size:13.5px;line-height:18px}',
       '.dss_meta{font-size:11.5px;line-height:15px;color:var(--dsw-alias-label-tertiary)}',
+      '.dss_status{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center;width:12px;height:12px;',
+      'color:var(--dsw-alias-state-idle-primary,#a0a4ab)}',
+      '.dss_status:after{content:"";position:absolute;inset:20%;border-radius:50%;background:currentColor}',
+      '.dss_status[data-state=done]{color:var(--dsw-alias-state-success-primary,#2ea043)}',
+      '.dss_status[data-state=warning]{color:var(--dsw-alias-state-warn-primary,#d29922)}',
+      '.dss_status[data-state=ongoing]{color:var(--dsw-alias-label-tertiary,#9aa0a6)}',
+      '.dss_status[data-state=ongoing]:after{content:none}',
+      '.dss_spin{width:12px;height:12px;overflow:visible;animation:dss_rotate 1.5s linear infinite}',
+      '.dss_spinTrack,.dss_spinArc{fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}',
+      '.dss_spinTrack{opacity:.25}',
+      '.dss_spinArc{stroke-dasharray:12 150;animation:dss_dash 1.5s ease-in-out infinite}',
+      '@keyframes dss_rotate{to{transform:rotate(360deg)}}',
+      '@keyframes dss_dash{0%{stroke-dasharray:1 150;stroke-dashoffset:0}50%{stroke-dasharray:90 150;stroke-dashoffset:-35}',
+      '100%{stroke-dasharray:90 150;stroke-dashoffset:-124}}',
+      '@media (prefers-reduced-motion:reduce){.dss_spin,.dss_spinArc{animation:none}}',
       '.dss_badge{flex:none;padding:1px 7px;border-radius:999px;border:.5px solid var(--dsw-alias-border-l3,rgba(0,0,0,.1));',
       'color:var(--dsw-alias-label-tertiary);font-size:10.5px;line-height:16px}',
       '.dss_empty{padding:18px 10px;text-align:center;color:var(--dsw-alias-label-tertiary);font-size:13px}',
@@ -364,6 +397,26 @@ window.__ModuleLoader__.load({
             h('span', { className: 'dss_name' }, info.title),
             h('span', { className: 'dss_meta' }, info.meta)
           ),
+          info.status === undefined
+            ? null
+            : h(
+                'span',
+                {
+                  className: 'dss_status',
+                  'data-state': info.status.state,
+                  title: info.status.label,
+                  'aria-label': info.status.label,
+                  role: 'img'
+                },
+                info.status.state === 'ongoing'
+                  ? h(
+                      'svg',
+                      { className: 'dss_spin', viewBox: '0 0 24 24', 'aria-hidden': 'true' },
+                      h('circle', { className: 'dss_spinTrack', cx: 12, cy: 12, r: 9.5 }),
+                      h('circle', { className: 'dss_spinArc', cx: 12, cy: 12, r: 9.5 })
+                    )
+                  : null
+              ),
           index === 0 ? h('span', { className: 'dss_badge' }, t('current')) : null
         )
       })
@@ -576,34 +629,59 @@ window.__ModuleLoader__.load({
         writeHistory(history)
       }
 
-      function shownScreens() {
+      /** Places that still exist: a deleted or archived Session, a withdrawn page or Settings section is gone. */
+      function livePlaces() {
         const list = ctx.sessions?.list?.getSnapshot?.()
-        const ready = list?.phase === 'ready'
+        const sessionsReady = list?.phase === 'ready' && list?.byId !== undefined && list.byId !== null
+        let archived = null
+        try {
+          const archivedIds = ctx.get?.('workspaces')?.list?.getSnapshot?.()?.archivedSessionIds
+          if (Array.isArray(archivedIds)) archived = new Set(archivedIds)
+        } catch (_error) {
+          archived = null
+        }
         const panelIds = new Set(
           entriesOf(MAIN_SLOT)
             .map((entry) => entry?.options?.key ?? entry?.options?.id)
             .filter((id) => typeof id === 'string')
         )
+        const sectionIds = new Set(
+          entriesOf(SECTION_SLOT)
+            .map((entry) => entry?.options?.id)
+            .filter((id) => typeof id === 'string')
+        )
         return history.filter((screen) => {
           if (screen.kind === 'session') {
-            if (!ready || list?.byId === undefined || list.byId === null) return true
-            return list.byId[screen.sessionId] !== undefined
+            if (!sessionsReady) return true
+            if (list.byId[screen.sessionId] === undefined) return false
+            return archived === null || !archived.has(screen.sessionId)
           }
-          if (screen.kind === 'panel') {
-            return panelIds.size === 0 || panelIds.has(screen.panelId)
+          if (screen.kind === 'panel') return panelIds.size === 0 || panelIds.has(screen.panelId)
+          if (screen.kind === 'settings') {
+            return screen.sectionId === null || sectionIds.size === 0 || sectionIds.has(screen.sectionId)
           }
-          return true
+          return false
         })
       }
 
       function refreshOpenList() {
         const state = overlay.getSnapshot()
-        const screens = shownScreens()
+        const screens = livePlaces()
         const index = Math.min(state.index, Math.max(0, screens.length - 1))
         overlay.set({ screens, index })
       }
 
+      /** Drop dead places from the stored list, not only from the open overlay. */
+      function pruneHistory() {
+        const live = livePlaces()
+        if (live.length === history.length) return
+        history = live
+        persist()
+        if (overlay.getSnapshot().open) refreshOpenList()
+      }
+
       function recordCurrent(force) {
+        pruneHistory()
         if (!force && Date.now() < suppressUntil) return
         const screen = currentScreen()
         if (screen === null) return
@@ -638,6 +716,26 @@ window.__ModuleLoader__.load({
         return resolveLabel(entry?.options?.label)
       }
 
+      /** Sidebar status of one Session: pending interaction, live run, unread completion, then idle. */
+      function statusOf(sessionId) {
+        let status
+        try {
+          status = ctx.get?.('uiSession')?.sessionStatus?.getSnapshot?.()?.get?.(sessionId)
+        } catch (_error) {
+          status = undefined
+        }
+        if (status === undefined || status === null) return { state: 'idle', label: translate('status.idle') }
+        const pending = status.pendingInteraction
+        if (pending !== undefined && pending !== null) {
+          const kind = pending.kind
+          const key = kind === 'approval' ? 'status.approval' : kind === 'plan-review' ? 'status.planReview' : 'status.answer'
+          return { state: 'warning', label: translate(key) }
+        }
+        if (status.running === true) return { state: 'ongoing', label: translate('status.running') }
+        if (status.completionUnread === true) return { state: 'done', label: translate('status.completed') }
+        return { state: 'idle', label: translate('status.idle') }
+      }
+
       function describe(screen) {
         if (screen.kind === 'session') {
           const list = ctx.sessions?.list?.getSnapshot?.()
@@ -647,7 +745,8 @@ window.__ModuleLoader__.load({
           return {
             icon: 'session',
             title: title === '' ? translate('session.untitled') : title,
-            meta: workspace === '' ? translate('session.noWorkspace') : workspace
+            meta: workspace === '' ? translate('session.noWorkspace') : workspace,
+            status: statusOf(screen.sessionId)
           }
         }
         if (screen.kind === 'panel') {
@@ -771,7 +870,7 @@ window.__ModuleLoader__.load({
 
       function openOverlay(step) {
         recordCurrent()
-        const screens = shownScreens()
+        const screens = livePlaces()
         const index = screens.length <= 1 ? 0 : step < 0 ? screens.length - 1 : 1
         overlay.set({ open: true, index, screens })
       }

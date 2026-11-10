@@ -26,10 +26,14 @@ no extra windows — one chord, one overlay.
 | Plugin page | the Plugins page's own store (`view`, `tab`) | that store's `setView`/`setTab` |
 | Settings | the Settings shell store (`open`, `activeId`) | its `open()`/`openSection()` |
 
+Each Session row carries the sidebar's own status dot: yellow if it waits for
+an approval, a plan review or an answer, a spinner while it runs, green when it
+finished with unread output, grey when idle.
+
 Visited places persist in `localStorage` under `dsh.screen-switcher.v1`, so the
-switcher still knows your recent screens after a reload or restart. Sessions
-that no longer exist and pages that are no longer registered are dropped when
-the list opens.
+switcher still knows your recent screens after a reload or restart. Deleted and
+archived Sessions and Settings sections that are no longer registered are
+dropped from both the list and the stored document when the switcher opens.
 
 ## Install
 
@@ -62,6 +66,9 @@ to an already installed copy hot-reload.
   page.
 - Screen history stops at the global page level; the right sidebar (files,
   terminal, browser) is not part of the list.
+- A plugin page for a package that was uninstalled stays in the list until the
+  cap evicts it: the Client cannot check the installed set synchronously. The
+  page itself reports the missing package.
 - Settings sub-tabs whose state lives inside a section component (for example
   the read-only inventory tabs under Built-in plugins) are restored to the
   section, not to the exact tab.

@@ -160,6 +160,9 @@ const sessions = memoryStore({
 })
 
 const panelInfo = memoryStore({ activePanelId: null })
+const sessionStatus = memoryStore(new Map())
+const uiSession = { sessionStatus }
+const workspaces = { list: memoryStore({ items: [], archivedSessionIds: [] }) }
 const calls = { openSession: [], selectPanel: [], openSection: [], close: 0, setView: [] }
 
 const settingsState = { open: false, activeId: undefined }
@@ -295,7 +298,13 @@ const localeValues = new Map([
   ['hint.tab', 'next'],
   ['hint.back', 'previous'],
   ['hint.esc', 'cancel'],
-  ['hint.release', 'release Ctrl to switch']
+  ['hint.release', 'release Ctrl to switch'],
+  ['status.running', 'Running'],
+  ['status.completed', 'New completion, unread'],
+  ['status.approval', 'Waiting for approval'],
+  ['status.planReview', 'Plan awaiting review'],
+  ['status.answer', 'Waiting for answer'],
+  ['status.idle', 'Idle']
 ])
 
 const locale = {
@@ -307,7 +316,7 @@ const locale = {
 }
 
 const sessionsService = { list: sessions }
-const services = { slots, locale, sessions: sessionsService, layout, uiWorkspace }
+const services = { slots, locale, sessions: sessionsService, layout, uiWorkspace, uiSession, workspaces }
 const ctx = {
   slots,
   locale,
@@ -397,6 +406,14 @@ function textOf(node) {
 const rowNames = () => rows().map((row) => textOf(row.children[1].children[0]))
 const rowMetas = () => rows().map((row) => textOf(row.children[1].children[1]))
 
+function rowByName(name) {
+  return rows().find((row) => textOf(row.children[1].children[0]) === name)
+}
+
+function statusOfRow(row) {
+  return row?.children.find((child) => child.props?.className === 'dss_status')
+}
+
 function keyOfScreen(screen) {
   if (screen.kind === 'session') return 'session:' + screen.sessionId
   if (screen.kind === 'panel') {
@@ -465,6 +482,32 @@ assert.equal(snapshot().index, 0)
 fireKey('keydown', { key: 'Tab', ctrlKey: true, shiftKey: true })
 assert.equal(snapshot().index, 1)
 
+// Session dots mirror the sidebar: completion, pending interaction, live run, idle.
+sessionStatus.set(new Map([['s1', { running: false, pendingInteraction: undefined, completionUnread: true }]]))
+fireKey('keydown', { key: 'Tab', code: 'Tab', ctrlKey: true })
+const doneDot = statusOfRow(rowByName('Alpha'))
+assert.equal(doneDot.props['data-state'], 'done')
+assert.equal(doneDot.props.title, 'New completion, unread')
+
+sessionStatus.set(new Map([['s1', { running: false, pendingInteraction: { kind: 'approval' }, completionUnread: false }]]))
+fireKey('keydown', { key: 'Tab', code: 'Tab', ctrlKey: true })
+const warnDot = statusOfRow(rowByName('Alpha'))
+assert.equal(warnDot.props['data-state'], 'warning')
+assert.equal(warnDot.props.title, 'Waiting for approval')
+
+sessionStatus.set(new Map([['s1', { running: true, pendingInteraction: undefined, completionUnread: false }]]))
+fireKey('keydown', { key: 'Tab', code: 'Tab', ctrlKey: true })
+const runDot = statusOfRow(rowByName('Alpha'))
+assert.equal(runDot.props['data-state'], 'ongoing')
+assert.equal(runDot.children[0].tag, 'svg')
+
+assert.equal(statusOfRow(rowByName('Beta')).props['data-state'], 'idle')
+sessionStatus.set(new Map())
+
+// Back to the previous place before committing.
+fireKey('keydown', { key: 'Escape' })
+openOn(1)
+
 // Releasing Ctrl commits the highlighted place.
 releaseCtrl()
 assert.deepEqual(calls.openSession, ['s1'])
@@ -529,11 +572,59 @@ fireKey('keydown', { key: 'Escape' })
 assert.equal(snapshot().open, false)
 assert.equal(calls.openSession.length, openedBefore)
 
+// Pruning: a place that stopped existing leaves the list and the stored document.
+sessions.set({
+  ...sessions.getSnapshot(),
+  ids: [...sessions.getSnapshot().ids, 's3'],
+  byId: {
+    ...sessions.getSnapshot().byId,
+    s3: { id: 's3', displayTitle: 'Gamma', cwd: '/work/gamma', retainedBy: {} }
+  }
+})
+layout.selectPanel(null)
+uiWorkspace.openSession('s3')
+advance(50)
+ctrlTab()
+assert.ok(rowNames().includes('Gamma'), 'visited Session enters the list')
+fireKey('keydown', { key: 'Escape' })
+
+const withS2 = sessions.getSnapshot()
+const withoutS2 = { ...withS2.byId }
+delete withoutS2.s2
+sessions.set({ ...withS2, ids: withS2.ids.filter((id) => id !== 's2'), byId: withoutS2 })
+ctrlTab()
+assert.ok(!rowNames().includes('Beta'), 'deleted Session is pruned')
+fireKey('keydown', { key: 'Escape' })
+
+slotEntries.get('settings.section').push({ options: { id: 'temp', label: () => 'Temp' } })
+settingsInstance.actions.openSection('temp')
+advance(50)
+settingsInstance.actions.close()
+layout.selectPanel(null)
+uiWorkspace.openSession('s1')
+advance(50)
+slotEntries.set(
+  'settings.section',
+  slotEntries.get('settings.section').filter((entry) => entry.options.id !== 'temp')
+)
+ctrlTab()
+assert.ok(!rowNames().includes('Temp'), 'withdrawn Settings section is pruned')
+fireKey('keydown', { key: 'Escape' })
+
+workspaces.list.set({ items: [], archivedSessionIds: ['s3'] })
+ctrlTab()
+assert.ok(!rowNames().includes('Gamma'), 'archived Session is pruned')
+fireKey('keydown', { key: 'Escape' })
+advance(1500)
+
 // The visited list survives a reload.
 const stored = JSON.parse(localStorage.getItem('dsh.screen-switcher.v1'))
 assert.equal(stored.v, 1)
 assert.ok(stored.screens.some((screen) => keyOfScreen(screen) === 'panel:plugins#package:dsh-select-quote'))
 assert.ok(stored.screens.some((screen) => keyOfScreen(screen) === 'settings:plugins'))
+assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'session:s2'))
+assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'session:s3'))
+assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'settings:temp'))
 
 console.log('screen-switcher: visited list, Ctrl+Tab cycling, Settings and Plugins navigation verified headlessly')
 console.log('screen-switcher: visual check still needs the running app')
