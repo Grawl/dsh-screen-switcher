@@ -838,21 +838,33 @@ window.__ModuleLoader__.load({
       }
 
       /**
-       * A plugin card survives client-side checks even after its package is uninstalled.
-       * When the switcher opens such a place, ask the plugin manager once; if the
-       * package is gone, forget the place and leave the Plugins list on screen.
+       * The Plugins page renders a card or a detail for every package it knows.
+       * Once its list has settled, a package name it no longer shows is a dead place:
+       * forget it and leave the page on its list instead of an empty detail.
        */
       function verifyPluginPlace(screen) {
         if (screen.kind !== 'panel' || screen.panelId !== PLUGINS_PANEL) return
         const view = screen.state?.view
-        if (view?.kind !== 'package' || typeof view.name !== 'string') return
-        let manager = null
-        try {
-          manager = ctx.get?.('remote')?.pluginManager ?? null
-        } catch (_error) {
-          manager = null
+        if (view?.kind !== 'package' || typeof view.name !== 'string' || view.name === '') return
+        const name = view.name
+        const startedAt = Date.now()
+        const stillOn = () => {
+          const instance = panelBinding?.instance
+          if (instance === null || instance === undefined) return false
+          try {
+            const snapshot = instance.getSnapshot()
+            return snapshot?.view?.kind === 'package' && snapshot.view.name === name
+          } catch (_error) {
+            return false
+          }
         }
-        if (manager === null || typeof manager.listBundles !== 'function') return
+        const nodes = () => {
+          try {
+            return Array.from(document.querySelectorAll('[data-plugin-detail],[data-plugin-package]'))
+          } catch (_error) {
+            return []
+          }
+        }
         const forget = () => {
           const next = history.filter((item) => keyOf(item) !== keyOf(screen))
           if (next.length !== history.length) {
@@ -869,28 +881,18 @@ window.__ModuleLoader__.load({
             /* the page owns its own recovery */
           }
         }
-        let pending
-        try {
-          pending = manager.listBundles()
-        } catch (_error) {
-          return
-        }
-        Promise.resolve(pending).then(
-          (answer) => {
-            if (answer?.ok !== true || !Array.isArray(answer.value)) return
-            const names = new Set(
-              answer.value
-                .map((bundle) => bundle?.name)
-                .filter((name) => typeof name === 'string' && name !== '')
-            )
-            if (names.size === 0) return
-            if (names.has(view.name)) return
+        const tick = () => {
+          if (!stillOn()) return
+          const found = nodes()
+          if (found.some((node) => node?.getAttribute?.('data-plugin-detail') === name)) return
+          if (found.some((node) => node?.getAttribute?.('data-plugin-package') === name)) return
+          if (found.some((node) => node?.hasAttribute?.('data-plugin-package') === true)) {
             forget()
-          },
-          () => {
-            /* an unavailable manager keeps the place: no proof it is gone */
+            return
           }
-        )
+          if (Date.now() - startedAt < 6000) window.setTimeout(tick, 120)
+        }
+        window.setTimeout(tick, 60)
       }
 
       function navigateTo(screen) {

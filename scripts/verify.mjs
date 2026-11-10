@@ -61,6 +61,19 @@ const fakeReactDom = {
 /* ---------- DOM ---------- */
 
 const styleTags = []
+const pluginPage = { cards: new Set(), details: new Set() }
+
+function pluginNode(attribute, value) {
+  return {
+    getAttribute(name) {
+      return name === attribute ? value : null
+    },
+    hasAttribute(name) {
+      return name === attribute
+    }
+  }
+}
+
 const fakeDocument = {
   visibilityState: 'visible',
   head: {
@@ -72,8 +85,15 @@ const fakeDocument = {
   querySelector() {
     return null
   },
-  querySelectorAll() {
-    return []
+  querySelectorAll(selector) {
+    const found = []
+    if (selector.includes('data-plugin-package')) {
+      for (const name of pluginPage.cards) found.push(pluginNode('data-plugin-package', name))
+    }
+    if (selector.includes('data-plugin-detail')) {
+      for (const name of pluginPage.details) found.push(pluginNode('data-plugin-detail', name))
+    }
+    return found
   },
   createElement(tag) {
     return { tag, dataset: {}, textContent: '', appendChild() {} }
@@ -650,8 +670,9 @@ advance(50)
 ctrlTab()
 const staleRow = rows().find((row) => textOf(row.children[1].children[0]) === 'gone-pkg')
 assert.ok(staleRow, 'the stale plugin card is listed before the visit')
+pluginPage.cards.add('dsh-select-quote')
 staleRow.props.onClick()
-await new Promise((resolve) => setImmediate(resolve))
+advance(200)
 assert.equal(pluginState.view.kind, 'list', 'the page falls back to the plugin list')
 ctrlTab()
 assert.ok(!rowNames().includes('gone-pkg'), 'the visited stale place is forgotten')
