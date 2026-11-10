@@ -626,6 +626,28 @@ assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'session:s2')
 assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'session:s3'))
 assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'settings:temp'))
 
+// No cap: every visited place stays until it stops existing.
+const zetaIds = Array.from({ length: 30 }, (_, index) => 'z' + String(index))
+const beforeZeta = sessions.getSnapshot()
+const zetaById = { ...beforeZeta.byId }
+for (const id of zetaIds) {
+  zetaById[id] = { id, displayTitle: 'Zeta ' + id.slice(1), cwd: '/work/zeta', retainedBy: {} }
+}
+sessions.set({ ...beforeZeta, ids: [...beforeZeta.ids, ...zetaIds], byId: zetaById })
+layout.selectPanel(null)
+for (const id of zetaIds) uiWorkspace.openSession(id)
+ctrlTab()
+assert.equal(
+  rowNames().filter((name) => name.startsWith('Zeta ')).length,
+  zetaIds.length,
+  'every visited place stays in the list'
+)
+fireKey('keydown', { key: 'Escape' })
+assert.ok(
+  JSON.parse(localStorage.getItem('dsh.screen-switcher.v1')).screens.length >= zetaIds.length,
+  'the stored list is uncapped too'
+)
+
 console.log('screen-switcher: visited list, Ctrl+Tab cycling, Settings and Plugins navigation verified headlessly')
 console.log('screen-switcher: visual check still needs the running app')
 

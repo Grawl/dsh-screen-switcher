@@ -29,8 +29,6 @@ window.__ModuleLoader__.load({
 
     /** Locale namespace owned by this plugin. */
     const NS = 'screenSwitcher'
-    /** Places kept in the visited list. */
-    const MAX_SCREENS = 24
     /** Versioned localStorage key; the list survives reloads and restarts. */
     const STORAGE_KEY = 'dsh.screen-switcher.v1'
     /** Style tag id, rewritten in place so a hot reload picks up new CSS. */
@@ -228,11 +226,11 @@ window.__ModuleLoader__.load({
       return ''
     }
 
-    /** Front-move `screen`, keeping one entry per key. */
+    /** Front-move `screen`, keeping one entry per key. The list is uncapped; dead places are pruned. */
     function mergeScreen(list, screen) {
       const key = keyOf(screen)
       const rest = list.filter((item) => keyOf(item) !== key)
-      return [screen, ...rest].slice(0, MAX_SCREENS)
+      return [screen, ...rest]
     }
 
     /** Wrap an index into a non-empty list. */
@@ -274,7 +272,7 @@ window.__ModuleLoader__.load({
         const parsed = JSON.parse(raw)
         const screens = Array.isArray(parsed) ? parsed : parsed?.screens
         if (!Array.isArray(screens)) return []
-        return screens.filter(isScreen).slice(0, MAX_SCREENS)
+        return screens.filter(isScreen)
       } catch (_error) {
         return []
       }
