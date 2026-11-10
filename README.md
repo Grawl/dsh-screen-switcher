@@ -34,7 +34,10 @@ Visited places persist in `localStorage` under `dsh.screen-switcher.v1`, so the
 switcher still knows your recent screens after a reload or restart. The list
 has no fixed size: a place stays until it stops existing. Deleted and archived
 Sessions and Settings sections that are no longer registered are dropped from
-both the list and the stored document when the switcher opens.
+both the list and the stored document when the switcher opens. Visiting a
+plugin card whose package is gone from the Plugins page drops the place once
+that page renders its list, and leaves the list on screen; a page that never
+renders a list keeps the place, because nothing proves the package is missing.
 
 ## Install
 
