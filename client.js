@@ -385,7 +385,9 @@ window.__ModuleLoader__.load({
             ref: (element) => {
               rowsRef.current[index] = element
             },
-            onMouseEnter: () => props.select(index),
+            onPointerMove: () => {
+              if (index !== state.index) props.select(index)
+            },
             onClick: () => props.commitScreen(screen)
           },
           h('span', { className: 'dss_icon' }, icon(info.icon)),

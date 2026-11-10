@@ -632,6 +632,15 @@ assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'session:s2')
 assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'session:s3'))
 assert.ok(!stored.screens.some((screen) => keyOfScreen(screen) === 'settings:temp'))
 
+// Hover follows real pointer movement, not the row that appears under a resting cursor.
+ctrlTab()
+assert.equal(rows().some((row) => row.props.onMouseEnter !== undefined), false, 'no enter-based selection')
+rows()[0].props.onPointerMove()
+assert.equal(snapshot().index, 0)
+rows()[0].props.onPointerMove()
+assert.equal(snapshot().index, 0)
+fireKey('keydown', { key: 'Escape' })
+
 // Visiting a plugin card whose package is gone forgets that place.
 layout.selectPanel('plugins')
 pluginInstance.actions.setView({ kind: 'package', name: 'gone-pkg' })
