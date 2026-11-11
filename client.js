@@ -383,11 +383,13 @@ window.__ModuleLoader__.load({
 
       useEffect(() => {
         if (!state.open || typeof requestAnimationFrame !== 'function') return
-        let previous = performance.now()
+        const openedAt = performance.now()
+        let previous = openedAt
         let frames = 0
         let handle = 0
         const step = (now) => {
           const gap = now - previous
+          if (frames === 0) notePerf({ at: Date.now(), kind: 'first', ms: Math.round(now - openedAt), n: state.screens.length })
           previous = now
           if (frames < 40 && gap >= 60) notePerf({ at: Date.now(), kind: 'frame', gap: Math.round(gap), n: frames })
           frames += 1
@@ -1085,7 +1087,7 @@ window.__ModuleLoader__.load({
             observer = new PerformanceObserver((list) => {
               for (const entry of list.getEntries()) {
                 if (entry.duration < 50) continue
-                notePerf({ at: Math.round(entry.startTime + performance.timeOrigin), kind: 'long', ms: Math.round(entry.duration) })
+                notePerf({ at: Date.now(), kind: 'long', ms: Math.round(entry.duration) })
               }
             })
             observer.observe({ entryTypes: ['longtask'] })
