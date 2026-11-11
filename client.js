@@ -113,6 +113,20 @@ window.__ModuleLoader__.load({
     /** Dictionaries beyond the zh/en baseline; registered only when the Host ships that language. */
     const EXTRA_DICTS = { ru }
 
+    /** Temporary timing samples for the open/commit path, readable from localStorage. */
+    const PERF_KEY = 'dsh.screen-switcher.perf'
+    function notePerf(sample) {
+      try {
+        const raw = localStorage.getItem(PERF_KEY)
+        const list = raw === null ? [] : JSON.parse(raw)
+        if (!Array.isArray(list)) return
+        list.unshift(sample)
+        localStorage.setItem(PERF_KEY, JSON.stringify(list.slice(0, 40)))
+      } catch (_error) {
+        /* diagnostics must never break the switcher */
+      }
+    }
+
     const CSS = [
       '.dss_root{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;padding:48px;',
       'background:rgba(15,17,21,.28);',
@@ -368,6 +382,7 @@ window.__ModuleLoader__.load({
       }, [state.open, state.index])
 
       if (!state.open) return null
+      const renderStarted = performance.now()
       const t = props.translate
       const screens = state.screens
       const rows = screens.map((screen, index) => {
@@ -421,6 +436,12 @@ window.__ModuleLoader__.load({
         )
       })
 
+      notePerf({
+        at: Date.now(),
+        kind: 'render',
+        total: Math.round((performance.now() - renderStarted) * 10) / 10,
+        n: screens.length
+      })
       return ReactDOM.createPortal(
         h(
           'div',
@@ -930,10 +951,21 @@ window.__ModuleLoader__.load({
       }
 
       function openOverlay(step) {
+        const started = performance.now()
         recordCurrent()
+        const recorded = performance.now()
         const screens = livePlaces()
+        const live = performance.now()
         const index = screens.length <= 1 ? 0 : step < 0 ? screens.length - 1 : 1
         overlay.set({ open: true, index, screens })
+        notePerf({
+          at: Date.now(),
+          kind: 'open',
+          total: Math.round((performance.now() - started) * 10) / 10,
+          record: Math.round((recorded - started) * 10) / 10,
+          live: Math.round((live - recorded) * 10) / 10,
+          n: screens.length
+        })
       }
 
       function cycle(step) {
@@ -951,13 +983,16 @@ window.__ModuleLoader__.load({
       }
 
       function commitScreen(screen) {
+        const started = performance.now()
         const here = currentScreen()
         closeOverlay()
         if (screen === undefined || (here !== null && keyOf(here) === keyOf(screen))) {
           recordCurrent()
+          notePerf({ at: Date.now(), kind: 'commit', target: 'same', total: Math.round((performance.now() - started) * 10) / 10 })
           return
         }
         navigateTo(screen)
+        notePerf({ at: Date.now(), kind: 'commit', target: screen.kind, total: Math.round((performance.now() - started) * 10) / 10 })
       }
 
       function commit(index) {
