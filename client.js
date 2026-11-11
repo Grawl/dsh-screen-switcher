@@ -381,6 +381,22 @@ window.__ModuleLoader__.load({
         }
       }, [state.open, state.index])
 
+      useEffect(() => {
+        if (!state.open || typeof requestAnimationFrame !== 'function') return
+        let previous = performance.now()
+        let frames = 0
+        let handle = 0
+        const step = (now) => {
+          const gap = now - previous
+          previous = now
+          if (frames < 40 && gap >= 60) notePerf({ at: Date.now(), kind: 'frame', gap: Math.round(gap), n: frames })
+          frames += 1
+          handle = requestAnimationFrame(step)
+        }
+        handle = requestAnimationFrame(step)
+        return () => cancelAnimationFrame(handle)
+      }, [state.open])
+
       if (!state.open) return null
       const renderStarted = performance.now()
       const t = props.translate
@@ -1061,6 +1077,24 @@ window.__ModuleLoader__.load({
       function onVisibilityChange() {
         if (document.visibilityState === 'hidden' && overlay.getSnapshot().open) closeOverlay()
       }
+
+      ctx.effect(() => {
+        let observer = null
+        try {
+          if (typeof PerformanceObserver === 'function') {
+            observer = new PerformanceObserver((list) => {
+              for (const entry of list.getEntries()) {
+                if (entry.duration < 50) continue
+                notePerf({ at: Math.round(entry.startTime + performance.timeOrigin), kind: 'long', ms: Math.round(entry.duration) })
+              }
+            })
+            observer.observe({ entryTypes: ['longtask'] })
+          }
+        } catch (_error) {
+          observer = null
+        }
+        return () => observer?.disconnect()
+      }, 'screen-switcher: long-task probe')
 
       ctx.effect(() => {
         bindSettings()
